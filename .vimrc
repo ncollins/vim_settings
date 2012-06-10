@@ -28,4 +28,4 @@ noremap! <Left> Esc
 noremap <Right> ""
 noremap! <Right> Esc
 
-set gfn=Menlo\ Regular:h18
+set gfn=Monaco:h18
