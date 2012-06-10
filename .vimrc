@@ -18,3 +18,5 @@ set softtabstop=4
 :let mapleader = "-"
 :noremap <leader>ev :vsplit $MYVIMRC<cr>
 :noremap <leader>sv :source $MYVIMRC<cr>
+
+set gfn=Menlo\ Regular:h18
