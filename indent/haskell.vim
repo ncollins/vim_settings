@@ -1,150 +1,125 @@
-" Vim indent: haskell
-" Version: @@VERSION@@
-" Copyright (C) 2008-2010 kana <http://whileimautomaton.net/>
-" License: So-called MIT/X license  {{{
-"     Permission is hereby granted, free of charge, to any person obtaining
-"     a copy of this software and associated documentation files (the
-"     "Software"), to deal in the Software without restriction, including
-"     without limitation the rights to use, copy, modify, merge, publish,
-"     distribute, sublicense, and/or sell copies of the Software, and to
-"     permit persons to whom the Software is furnished to do so, subject to
-"     the following conditions:
-"
-"     The above copyright notice and this permission notice shall be included
-"     in all copies or substantial portions of the Software.
-"
-"     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-"     OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-"     MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-"     IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-"     CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-"     TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-"     SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-" }}}
+" Vim indent file
+" Language:     Haskell
+" Maintainer:   lilydjwg <lilydjwg@gmail.com>
+" Version:	1.0
+" References:	http://en.wikibooks.org/wiki/Haskell/Indentation
+" 		http://book.realworldhaskell.org/read/
+" See Also:	The Align plugin http://www.vim.org/scripts/script.php?script_id=294
 
-" Notation:
-" * "#" indicates a whitespace for indentation.
-" * "<|>" indicates the cursor position after automatic indentation.
-" * "<*>" indicates the cursor position before automatic indentation.
+" Only load this indent file when no other was loaded.
+if exists("b:did_indent")
+  finish
+endif
+let b:did_indent = 1
 
-if exists('b:did_indent')
+setlocal indentexpr=HaskellIndent()
+for i in split('0{,:,0#,e', ',')
+  exec "setlocal indentkeys-=" . i
+endfor
+setlocal indentkeys+=0=else,0=in,0=where,0),0<bar>
+setlocal tabstop=8
+setlocal expandtab
+
+if !exists('g:Haskell_no_mapping')
+  inoremap <silent> <BS> <C-R>=<SID>HaskellDedent(1)<CR>
+  inoremap <silent> <C-D> <C-R>=<SID>HaskellDedent(0)<CR>
+endif
+
+" Only define the functions once.
+if exists("*HaskellIndent")
   finish
 endif
 
+let s:align_map = {
+      \ 'in': '\<let\>',
+      \ 'else': '\<then\>',
+      \ ',': '\v%(\s|\w|^)@<=[[{]%(\s|\w|"|$)@='
+      \ }
+let s:indent_self = ['=']
+let s:indent_next = ['let', 'in', 'where', 'do', 'if']
+let s:indent_if_final = ['=', 'do', '->', 'of', 'where']
 
+function HaskellIndent()
+  let lnum = v:lnum - 1
 
-
-setlocal autoindent
-setlocal indentexpr=GetHaskellIndent()
-setlocal indentkeys=!^F,o,O,=where,0<Bar>
-
-setlocal expandtab
-setlocal softtabstop=2
-setlocal shiftwidth=2
-
-let b:undo_indent = 'setlocal '.join([
-\   'autoindent<',
-\   'expandtab<',
-\   'indentexpr<',
-\   'indentkeys<',
-\   'shiftwidth<',
-\   'softtabstop<',
-\ ])
-
-
-
-
-function! GetHaskellIndent()
-  let n0 = v:lnum
-  let n1 = v:lnum - 1
-  let l0 = getline(n0)
-  let l1 = getline(n1)
-
-    " NB: l0 may have trailing characters.  For example: iloveyou<Left><Return>
-  let at_new_line_p = (col('.') - 1) == matchend(l0, '^\s*')
-  if at_new_line_p
-    " Case: 'class' statement
-    "   class Monad m where<*>
-    "   ##<|>
-    if l1 =~# '\v^\s*<class>.*<where>'
-      return indent(n1) + &l:shiftwidth
-    endif
-
-    " Case: 'instance' statement
-    "   instance Eq Foo where<*>
-    "   ##<|>
-    if l1 =~# '\v^\s*<instance>.*<where>'
-      return indent(n1) + &l:shiftwidth
-    endif
-
-    " Case: 'do' notation (1)
-    "   f a b = do<*>
-    "   ##<|>
-    if l1 =~# '\v^\s*.{-}<do>\s*(--.*)?$'
-      return indent(n1) + &l:shiftwidth
-    endif
-
-    " Case: 'do' notation (2)
-    "   f a b = do g a<*>
-    "   ###########<|>
-    let xs = matchlist(l1, '\v^(\s*.{-}<do>\s*)\S')
-    if xs != []
-      return len(xs[1])
-    endif
-
-    " Case: Function definition (1)
-    "   f a b =<*>
-    "   ##<|>
-    if l1 =~# '\v^\s*<\S.*\s+\=\s*(--.*)?$'
-      return indent(n1) + &l:shiftwidth
-    endif
-
-    " Case: Function definition (2)
-    "   f a b = g a >>=<*>
-    "   ########<|>
-    let R = '\v^(.{-}\s+\=\s+)\S.{-}[^A-Za-z0-9_"'')}\]]\s*(--.*)?$'
-    let xs = matchlist(l1, R)
-    if xs != []
-      return len(xs[1])
-    endif
-
-    " Case: 'where' clause (2)
-    "   foo = bar . baz
-    "   ##where<*>
-    "   ####<|>
-    if l1 =~# '\v^\s*<where>\s*(--.*)?$'
-      return indent(n1) + &l:shiftwidth
-    endif
-
-    " Otherwise: Keep the previous indentation level.
-    return -1
-  else
-    " Case: 'where' clause (1)
-    "   foo = bar . baz
-    "   ##where<*><|>
-    if l0 =~# '\v^\s*<where>'
-      return indent(prevnonblank(n1)) + &l:shiftwidth
-    endif
-
-    " Case: Guards (1)
-    "   f a b
-    "   ##|<*><|>
-    if l0 =~# '\v^\s*\|'
-      let np = prevnonblank(n1)
-      let after_guard_p = (getline(np) =~# '\v^\s*\|')
-      return indent(np) + (after_guard_p ? 0 : &l:shiftwidth)
-    endif
-
-
-    " Otherwise: Keep the previous indentation level.
-    return -1
+  " Hit the start of the file, use zero indent.
+  if lnum == 0
+    return 0
   endif
+
+  let ind = indent(lnum)
+  let prevline = getline(lnum)
+  let curline = getline(v:lnum)
+  let curwords = split(curline)
+  if len(curwords) > 0 
+    if has_key(s:align_map, curwords[0])
+      let word = s:align_map[curwords[0]]
+      let m = -1
+      let line = v:lnum
+      while m == -1
+	let line -= 1
+	if line <= 0
+	  return -1
+	endif
+	let m = match(getline(line), word)
+      endwhile
+      return m
+    elseif index(s:indent_self, curwords[0]) != -1
+      return ind + &sw
+    elseif curwords[0] == '|'
+      return match(prevline, '\v%(\s|\w|^)@<=[|=]%(\s|\w)@=')
+    elseif index([')', '}'], curwords[0]) != -1
+      return ind - &sw
+    elseif curwords[0] == 'where'
+      if prevline =~ '\v^\s+\|%(\s|\w)@='
+	return ind - 1
+      endif
+    endif
+  endif
+
+  let prevwords = split(prevline)
+  if len(prevwords) == 0
+    return 0
+  endif
+
+  if prevwords[-1] == 'where' && prevwords[0] == 'module'
+    return 0
+  elseif index(s:indent_if_final, prevwords[-1]) != -1
+    return ind + &sw
+  elseif prevwords[-1] =~ '\v%(\s|\w|^)@<=[[{(]$'
+    return ind + &sw
+  else
+    for word in reverse(prevwords)
+      if index(s:indent_next, word) != -1
+	return match(prevline, '\<'.word.'\>') + len(word) + 1
+      endif
+    endfor
+  endif
+
+  if len(curwords) > 0 && curwords[0] == 'where'
+    return ind + &sw
+  endif
+
+  return ind
 endfunction
 
+function s:HaskellDedent(isbs)
+  if a:isbs && strpart(getline('.'), 0, col('.')-1) !~ '^\s\+$'
+    return "\<BS>"
+  endif
 
-
-
-let b:did_indent = 1
-
-" __END__
-" vim: foldmethod=marker
+  let curind = indent('.')
+  let line = line('.') - 1
+  while curind > 0 && line > 0
+    let ind = indent(line) 
+    if ind >= curind
+      let line -= 1
+    else
+      echomsg curind ind
+      call setline('.', repeat(' ', ind) .
+	    \ substitute(getline('.'), '^\s\+', '', ''))
+      return ''
+    endif
+  endwhile
+  return a:isbs ? "\<BS>" : ''
+endfunction
